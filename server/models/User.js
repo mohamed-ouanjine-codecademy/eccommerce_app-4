@@ -38,4 +38,21 @@ const UserSchema = new mongoose.Schema({
   timestamps: true,
 });
 
+UserSchema.post('find', async function (docs) {
+  if (!Array.isArray(docs)) return;
+  
+  for (const user of docs) {
+    if (user.cart?.length) {
+      const validProducts = await Product.find({
+        _id: { $in: user.cart.map(i => i.product) }
+      });
+      
+      user.cart = user.cart.filter(item => 
+        validProducts.some(p => p._id.equals(item.product))
+      );
+      await user.save();
+    }
+  }
+});
+
 module.exports = mongoose.model('User', UserSchema);

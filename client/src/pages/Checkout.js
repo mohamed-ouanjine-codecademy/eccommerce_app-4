@@ -1,13 +1,22 @@
-import React, { useState, useEffect } from 'react';
+// src/pages/Checkout.js
+import React, { useEffect, useState } from 'react';
 import { Form, Button, Alert, Card } from 'react-bootstrap';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 
-const Checkout = ({ cartItems, setCartItemCount, setCartItems }) => {
+const Checkout = ({ cartItems, setCartItems, setCartItemCount, syncCartWithServer }) => {
   const [shippingAddress, setShippingAddress] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+
+  // Calculate total function
+  const calculateTotal = () => {
+    return cartItems.reduce((sum, item) => {
+      const price = Number(item.product?.price) || 0; // Force numeric conversion
+      return sum + (price * item.quantity);
+    }, 0);
+  };
 
   useEffect(() => {
     if (!cartItems || cartItems.length === 0) {
@@ -15,66 +24,66 @@ const Checkout = ({ cartItems, setCartItemCount, setCartItems }) => {
     }
   }, [cartItems, navigate]);
 
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
+    setError('');
+    const token = localStorage.getItem('userToken');
+
     try {
-      // Validate cart items
-      if (!cartItems?.length) {
-        throw new Error('Your cart is empty');
+      // 1. Validate cart and total
+      const total = calculateTotal();
+      if (isNaN(total) || total <= 0) {
+        throw new Error('Invalid cart total');
       }
 
-      const token = localStorage.getItem('userToken');
-      console.log('Initiating checkout process...');
-  
-      // [1] Calculate Total
-      const totalAmount = cartItems?.reduce(
-        (sum, item) => sum + (item.product?.price || 0) * item.quantity,
-        0
-      ) || 0;
-      console.log('Cart total calculated:', totalAmount);
-  
-      // [2] Mock Payment Processing
-      console.log('Starting mock payment...');
+      // 2. Process payment
       const paymentResponse = await axios.post(
-        '/api/orders/payment/mock',
-        { amount: totalAmount },
+        'http://localhost:5000/api/orders/payment/mock',
+        { amount: total.toFixed(2) },
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      console.log('Payment response:', paymentResponse.data);
-  
+
       if (!paymentResponse.data.success) {
-        throw new Error('Payment processing failed - contact support');
+        throw new Error('Payment authorization failed');
       }
-  
-      // [3] Create Order
-      console.log('Creating order with shipping address:', shippingAddress);
+
+      // 3. Create order
       const orderResponse = await axios.post(
-        '/api/orders',
+        'http://localhost:5000/api/orders', // Direct server URL
         {
           shippingAddress,
-          paymentConfirmed: true
+          paymentConfirmed: true,
+          cartItems // Add this line to send cart items
         },
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      console.log('Order created:', orderResponse.data);
-  
-      // [4] Clear Cart State
-      console.log('Clearing cart...');
-      setCartItems([]);
-      setCartItemCount(0);
-  
-      // [5] Redirect
-      console.log('Redirecting to order confirmation...');
-      navigate(`/orders/${orderResponse.data._id}`);
-  
+
+      // 4. Handle success
+      if (orderResponse.data.success) {
+        setCartItems([]);
+        setCartItemCount(0);
+        navigate(`/orders/${orderResponse.data.order._id}`);
+      } else {
+        throw new Error('Order creation failed');
+      }
+
     } catch (err) {
-      console.error('Checkout Error:', {
-        error: err.response?.data || err.message,
-        config: err.config
-      });
-      setError(err.response?.data?.error || err.message);
+      console.error('Full error object:', err); // Add detailed logging
+      const serverMessage = err.response?.data?.error?.message;
+      const errorMessage = serverMessage || 
+                          err.message || 
+                          'Order failed. Please contact support.';
+      setError(errorMessage);
+
+      // 5. Sync cart if error contains stock information
+      if (errorMessage.toLowerCase().includes('stock')) {
+        try {
+          await syncCartWithServer();
+        } catch (refreshError) {
+          console.error('Cart refresh failed:', refreshError);
+        }
+      }
     } finally {
       setLoading(false);
     }
@@ -83,7 +92,15 @@ const Checkout = ({ cartItems, setCartItemCount, setCartItems }) => {
   return (
     <div className="container mt-5">
       <h2>Checkout</h2>
+
+      {!error && cartItems?.length > 0 && (
+        <div className="mb-3">
+          <strong>Total:</strong> ${calculateTotal()}
+        </div>
+      )}
+
       {error && <Alert variant="danger">{error}</Alert>}
+
       {cartItems?.length > 0 ? (
         <Card className="p-3">
           <Form onSubmit={handleSubmit}>
@@ -97,8 +114,13 @@ const Checkout = ({ cartItems, setCartItemCount, setCartItems }) => {
                 required
               />
             </Form.Group>
-            <Button type="submit" disabled={loading}>
-              {loading ? 'Processing...' : 'Place Order'}
+
+            <Button
+              type="submit"
+              disabled={loading}
+              variant={error ? 'danger' : 'primary'}
+            >
+              {loading ? 'Processing...' : error ? 'Try Again' : 'Place Order'}
             </Button>
           </Form>
         </Card>

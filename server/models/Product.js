@@ -1,3 +1,4 @@
+// models/Products.js
 const mongoose = require('mongoose');
 
 const productSchema = new mongoose.Schema({
@@ -9,15 +10,13 @@ const productSchema = new mongoose.Schema({
   },
   price: {
     type: Number,
-    required: [true, 'Price is required'],
-    min: [0.01, 'Price must be at least $0.01'],
+    required: true,
     validate: {
-      validator: function(v) {
+      validator: function (v) {
         return v > 0;
       },
       message: 'Price must be greater than 0'
-    },
-    set: v => parseFloat(v.toFixed(2)) // Ensure 2 decimal places
+    }
   },
   priceHistory: [{
     price: {
@@ -45,22 +44,46 @@ const productSchema = new mongoose.Schema({
   },
   stock: {
     type: Number,
-    required: true,
     min: [0, 'Stock cannot be negative'],
-    default: 0
-  }
+    default: 10, // Change from 0 to 10
+    validate: {
+      validator: Number.isInteger,
+      message: 'Stock must be a whole number'
+    }
+  },
+  safetyStock: {
+    type: Number,
+    min: 0,
+    default: 5
+  },
+  allowBackorder: {
+    type: Boolean,
+    default: false
+  },
+  lastRestock: Date,
+  version: { type: Number, default: 0 }
 }, {
   timestamps: true
 });
 
+productSchema.methods.getSafeStockInfo = function () {
+  return {
+    _id: this._id,
+    name: this.name,
+    price: this.price,
+    availableStock: this.stock,
+    maxOrderQty: Math.min(this.stock, 10) // Limits max purchase quantity
+  };
+};
+
 // Price change tracking
-productSchema.pre('save', function(next) {
+productSchema.pre('save', function (next) {
   if (this.isModified('price')) {
     const currentPrice = this.price;
-    
+
     // Only add if different from last entry
-    if (this.priceHistory.length === 0 || 
-        this.priceHistory[this.priceHistory.length - 1].price !== currentPrice) {
+    if (this.priceHistory.length === 0 ||
+      this.priceHistory[this.priceHistory.length - 1].price !== currentPrice) {
       this.priceHistory.push({ price: currentPrice });
     }
   }

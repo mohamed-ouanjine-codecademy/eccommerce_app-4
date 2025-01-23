@@ -55,7 +55,8 @@ router.post('/products', auth, admin, async (req, res) => {
       price: req.body.price,
       description: req.body.description,
       category: req.body.category,
-      image: req.body.image
+      image: req.body.image,
+      stock: req.body.stock || 10 // Add this line
     });
     await product.save();
     res.status(201).json(product);

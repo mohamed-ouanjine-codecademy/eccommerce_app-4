@@ -15,8 +15,13 @@ const AdminDashboard = () => {
     endDate: '',
     userId: '',
   });
-  const [newProduct, setNewProduct] = useState({ 
-    name: '', price: 0, description: '', category: '', image: '' 
+  const [newProduct, setNewProduct] = useState({
+    name: '',
+    price: 0,
+    description: '',
+    category: '',
+    image: '',
+    stock: 10 // Add default stock
   });
   const [editingProduct, setEditingProduct] = useState(null);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -94,7 +99,7 @@ const AdminDashboard = () => {
       setError('Failed to load analytics: ' + (err.response?.data?.error || err.message));
     }
   };
-  
+
   // Add to useEffect that runs on component mount
   useEffect(() => {
     fetchAnalytics();
@@ -131,7 +136,7 @@ const AdminDashboard = () => {
     try {
       const token = localStorage.getItem('userToken');
       const { data } = await axios.post('/api/admin/upload', formData, {
-        headers: { 
+        headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'multipart/form-data'
         }
@@ -152,7 +157,7 @@ const AdminDashboard = () => {
     try {
       const token = localStorage.getItem('userToken');
       const { data } = await axios.post('/api/admin/upload', formData, {
-        headers: { 
+        headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'multipart/form-data'
         }
@@ -172,8 +177,8 @@ const AdminDashboard = () => {
         editingProduct,
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      
-      setProducts(prev => 
+
+      setProducts(prev =>
         prev.map(p => p._id === data._id ? data : p)
       );
       setShowEditModal(false);
@@ -204,7 +209,7 @@ const AdminDashboard = () => {
     }
   };
 
-  
+
 
   // Users
   const handleDeleteUser = async (userId) => {
@@ -295,9 +300,9 @@ const AdminDashboard = () => {
                 accept="image/*"
               />
               {editingProduct?.image && (
-                <img 
-                  src={editingProduct.image} 
-                  alt="Preview" 
+                <img
+                  src={editingProduct.image}
+                  alt="Preview"
                   className="mt-2"
                   style={{ width: '100px' }}
                 />
@@ -311,7 +316,7 @@ const AdminDashboard = () => {
       </Modal>
       <Tabs defaultActiveKey="products">
         <Tab eventKey="products" title="Products">
-        <Form onSubmit={handleAddProduct} className="mb-4">
+          <Form onSubmit={handleAddProduct} className="mb-4">
             <Form.Group className="mb-3">
               <Form.Label>Product Name</Form.Label>
               <Form.Control
@@ -327,6 +332,16 @@ const AdminDashboard = () => {
                 type="number"
                 value={newProduct.price}
                 onChange={(e) => setNewProduct({ ...newProduct, price: e.target.value })}
+                required
+              />
+            </Form.Group>
+            <Form.Group className="mb-3">
+              <Form.Label>Stock Quantity</Form.Label>
+              <Form.Control
+                type="number"
+                value={newProduct.stock}
+                onChange={(e) => setNewProduct({ ...newProduct, stock: e.target.value })}
+                min="0"
                 required
               />
             </Form.Group>
@@ -348,9 +363,9 @@ const AdminDashboard = () => {
                 required
               />
               {newProduct.image && (
-                <img 
-                  src={newProduct.image} 
-                  alt="Preview" 
+                <img
+                  src={newProduct.image}
+                  alt="Preview"
                   style={{ width: '100px', marginTop: '10px' }}
                 />
               )}
@@ -368,17 +383,17 @@ const AdminDashboard = () => {
             <tbody>
               {Array.isArray(products) && products.map((product) => (
                 <tr key={product._id}>
-                  <td>{product.name}</td>
+                  <td><Link to={`/products/${product._id}`}>{product.name}</Link></td>
                   <td>${product.price}</td>
                   <td>
-                    <Button 
-                      variant="warning" 
+                    <Button
+                      variant="warning"
                       className="me-2"
                       onClick={() => handleEdit(product)}
                     >
                       Edit
                     </Button>
-                    <Button 
+                    <Button
                       variant="danger"
                       onClick={() => handleDeleteProductClick(product._id, product.name)}
                     >
@@ -389,8 +404,8 @@ const AdminDashboard = () => {
               ))}
             </tbody>
           </Table>
-          <PaginationControls 
-            pagination={pagination} 
+          <PaginationControls
+            pagination={pagination}
             setPagination={setPagination}
           />
         </Tab>
@@ -440,7 +455,7 @@ const AdminDashboard = () => {
                 onChange={(e) => setFilters({ ...filters, userId: e.target.value })}
               />
             </Form.Group>
-          </div>    
+          </div>
           <Table striped bordered hover>
             <thead>
               <tr>
@@ -470,8 +485,8 @@ const AdminDashboard = () => {
                     </Form.Select>
                   </td>
                   <td>
-                    <Button 
-                      as={Link} 
+                    <Button
+                      as={Link}
                       to={`/admin/orders/${order._id}`}
                       variant="info"
                       size="sm"
@@ -483,8 +498,8 @@ const AdminDashboard = () => {
               ))}
             </tbody>
           </Table>
-          <PaginationControls 
-            pagination={pagination} 
+          <PaginationControls
+            pagination={pagination}
             setPagination={setPagination}
           />
         </Tab>
@@ -507,7 +522,7 @@ const AdminDashboard = () => {
                   <td>
                     <Form.Select
                       value={user.isAdmin}
-                      onChange={(e) => 
+                      onChange={(e) =>
                         handleRoleChange(user._id, e.target.value === 'true')
                       }
                     >
@@ -527,8 +542,8 @@ const AdminDashboard = () => {
               ))}
             </tbody>
           </Table>
-          <PaginationControls 
-            pagination={pagination} 
+          <PaginationControls
+            pagination={pagination}
             setPagination={setPagination}
           />
         </Tab>
@@ -542,7 +557,7 @@ const AdminDashboard = () => {
                 <Alert variant="info">No revenue data available</Alert>
               )}
             </div>
-            
+
             <h4>Top Performing Products</h4>
             <div style={{ height: '400px' }}>
               {analyticsData.topProducts.length > 0 ? (
@@ -568,7 +583,7 @@ const AdminDashboard = () => {
           </Button>
         </Modal.Footer>
       </Modal>
-      
+
     </div>
   );
 };

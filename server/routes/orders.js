@@ -7,9 +7,17 @@ const Order = require('../models/Order');
 const User = require('../models/User');
 const Product = require('../models/Product'); // Add this line
 const nodemailer = require('nodemailer');
+const axios = require('axios')
+require('dotenv').config();
 
 // Apply auth middleware to all order routes
 router.use(auth);
+
+// Add base URL middleware
+router.use((req, res, next) => {
+  req.baseUrl = process.env.BASE_URL || 'http://localhost:5000';
+  next();
+});
 
 // Create test email account (add to top of file)
 let testAccount;
@@ -21,13 +29,25 @@ let testAccount;
 router.post('/payment/mock', auth, async (req, res) => {
   try {
     await new Promise(resolve => setTimeout(resolve, 1500));
+    
+    if (!req.body.amount || req.body.amount <= 0) {
+      return res.status(400).json({ 
+        error: 'INVALID_AMOUNT',
+        message: 'Payment amount must be greater than 0'
+      });
+    }
+
     res.json({
       success: true,
       transactionId: `MOCK_${Date.now()}`,
       amount: req.body.amount
     });
+    
   } catch (err) {
-    res.status(500).json({ error: 'Payment failed' });
+    res.status(500).json({ 
+      error: 'PAYMENT_FAILED',
+      message: 'Mock payment processing failed'
+    });
   }
 });
 
@@ -35,100 +55,143 @@ router.post('/payment/mock', auth, async (req, res) => {
 // In your order creation route (routes/orders.js)
 router.post('/', auth, async (req, res) => {
   const session = await mongoose.startSession();
+  session.startTransaction();
+  
   try {
-    await session.startTransaction();
-    
-    const { shippingAddress, paymentConfirmed } = req.body;
+    const token = req.headers.authorization.split(' ')[1]; // Get token from headers
     const userId = req.user.userId;
+    const { shippingAddress } = req.body;
+    const { cartItems } = req.body; // Add cartItems to request body
 
-    // Payment verification
-    if (process.env.NODE_ENV === 'production' && !paymentConfirmed) {
-      throw new Error('Payment confirmation required');
-    }
-
-    // Get user cart with products
+    // 1. Get user with valid cart items
     const user = await User.findById(userId)
-      .populate('cart.product')
+      .populate({
+        path: 'cart.product',
+        select: 'name price stock',
+        match: { 
+          status: { $ne: 'deleted' },
+          price: { $gt: 0 }
+        }
+      })
       .session(session);
 
-    // Validate cart contents
-    if (!user.cart?.length) {
-      throw new Error('Cannot create order with empty cart');
+    // 2. Validate cart contents
+    const validItems = user.cart.filter(item => 
+      item.product &&
+      item.product.price > 0 &&
+      item.product.stock >= item.quantity
+    );
+
+    // Add proper validation
+    if (!cartItems || !Array.isArray(cartItems)) {
+      await session.abortTransaction();
+      return res.status(400).json({
+        error: 'INVALID_CART',
+        message: 'Invalid cart items format'
+      });
     }
 
-    // Validate prices and process inventory
-    let total = 0;
-    const items = [];
-    
-    for (const cartItem of user.cart) {
-      const product = cartItem.product;
-      
-      // Price validation
-      if (!product || product.price <= 0) {
-        throw new Error(`Invalid price for ${product?.name || 'unknown product'}`);
-      }
+    // 3. Calculate total and verify
+    const total = validItems.reduce((sum, item) => {
+      return sum + (item.product.price * item.quantity);
+    }, 0);
 
-      // Inventory check
-      if (product.stock < cartItem.quantity) {
-        throw new Error(
-          `${product.name} stock insufficient (${product.stock} available, ${cartItem.quantity} requested)`
-        );
+    if (total <= 0) {
+      await session.abortTransaction();
+      return res.status(400).json({
+        error: 'INVALID_TOTAL',
+        message: 'Cannot create order with zero total'
+      });
+    }
+
+    // 4. Process payment (mock example)
+    const paymentResponse = await axios.post(
+    `${req.baseUrl}/api/orders/payment/mock`,
+      { amount: total.toFixed(2) },
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+
+    if (!paymentResponse.data.success) {
+      await session.abortTransaction();
+      return res.status(400).json({
+        error: 'PAYMENT_FAILED',
+        message: 'Payment processing failed'
+      });
+    }
+
+    // 5. Update stock and create order
+    const orderItems = [];
+    for (const item of validItems) {
+      const product = await Product.findById(item.product._id).session(session);
+      
+      // Double-check stock availability
+      if (product.stock < item.quantity) {
+        await session.abortTransaction();
+        return res.status(409).json({
+          error: 'INSUFFICIENT_STOCK',
+          message: `${product.name} only has ${product.stock} items left`,
+          productId: product._id
+        });
       }
 
       // Update stock
-      product.stock -= cartItem.quantity;
+      product.stock -= item.quantity;
       await product.save({ session });
 
-      // Store price snapshot
-      items.push({
+      // Add to order items
+      orderItems.push({
         product: product._id,
-        quantity: cartItem.quantity,
-        price: product.price || 0 // Ensure price is always set
+        quantity: item.quantity,
+        price: product.price
       });
-
-      total += product.price * cartItem.quantity;
     }
 
-    // Create order
+    // 6. Create order
     const order = new Order({
       user: userId,
-      items,
+      items: orderItems,
       total: parseFloat(total.toFixed(2)),
       shippingAddress,
-      status: 'processing',
-      paymentStatus: paymentConfirmed ? 'completed' : 'pending'
+      paymentStatus: 'completed',
+      status: 'processing'
     });
 
     await order.save({ session });
 
-    // Clear user cart
+    // 7. Clear user's cart
     user.cart = [];
     await user.save({ session });
 
-    // Commit transaction
     await session.commitTransaction();
-
-    // Return order data
-    const orderData = await Order.findById(order._id)
-      .populate('items.product', 'name')
-      .lean();
+    
+    // 8. Return formatted response
+    const populatedOrder = await Order.findById(order._id)
+      .populate('items.product', 'name price')
+      .populate('user', 'name email');
 
     res.status(201).json({
-      ...orderData,
-      items: orderData.items.map(item => ({
-        ...item,
-        price: item.price,
-        total: item.price * item.quantity
-      }))
+      success: true,
+      order: {
+        ...populatedOrder.toObject(),
+        items: populatedOrder.items.map(item => ({
+          ...item,
+          total: item.price * item.quantity
+        }))
+      }
     });
 
   } catch (err) {
     await session.abortTransaction();
-    console.error('Order creation failed:', err.message);
-    res.status(400).json({ 
-      error: err.message.includes('stock') || err.message.includes('price')
-        ? err.message
-        : 'Order processing failed'
+    console.error('Order creation error details:', {
+      error: err.stack,
+      body: req.body
+    });
+    
+    res.status(500).json({
+      error: 'ORDER_FAILED',
+      message: process.env.NODE_ENV === 'production' 
+        ? 'Order processing failed' 
+        : err.message
     });
   } finally {
     session.endSession();
@@ -157,86 +220,6 @@ let transporter;
   }
 })();
 
-router.post('/', async (req, res) => {
-  const session = await mongoose.startSession();
-  try {
-    await session.startTransaction();
-    
-    const userId = req.user.userId;
-    const { shippingAddress, paymentConfirmed } = req.body;
-
-    // if (!paymentConfirmed) {
-    //   return res.status(400).json({ error: 'Payment not confirmed' });
-    // }
-
-    const user = await User.findById(userId)
-      .populate('cart.product')
-      .session(session);
-
-    // Inventory check and stock update
-    for (const item of user.cart) {
-      const product = await Product.findById(item.product._id).session(session);
-      if (product.stock < item.quantity) {
-        throw new Error(`Insufficient stock for ${product.name}`);
-      }
-      product.stock -= item.quantity;
-      await product.save({ session });
-    }
-
-    const total = user.cart.reduce(
-      (sum, item) => sum + (item.product.price * item.quantity),
-      0
-    );
-
-    const order = new Order({
-      user: userId,
-      items: user.cart.map(item => ({
-        product: item.product._id,
-        quantity: item.quantity,
-      })),
-      total,
-      shippingAddress
-    });
-
-    await order.save({ session });
-
-    user.cart = [];
-    await user.save({ session });
-
-    // Send email (non-critical operation)
-    try {
-      const mailOptions = {
-        from: process.env.EMAIL_FROM,
-        to: user.email,
-        subject: `Order Confirmation #${order._id}`,
-        html: generateOrderEmail(order) // Use a template function
-      };
-      await transporter.sendMail(mailOptions);
-    } catch (emailError) {
-      console.error('Email failed:', emailError);
-    }
-
-    await session.commitTransaction();
-    
-    const populatedOrder = await Order.findById(order._id)
-      .populate('items.product', 'name price')
-      .populate('user', 'name email');
-
-    res.status(201).json(populatedOrder);
-
-  } catch (err) {
-    await session.abortTransaction();
-    console.error('Order creation error:', err);
-    res.status(500).json({ 
-      error: err.message.startsWith('Insufficient') 
-        ? err.message 
-        : 'Order creation failed' 
-    });
-  } finally {
-    session.endSession();
-  }
-});
-
 // Get user's orders
 router.get('/', async (req, res) => {
   try {
@@ -258,7 +241,7 @@ router.get('/:id', auth, async (req, res) => {
       .populate('items.product', 'name price');
 
     if (!order) return res.status(404).json({ error: 'Order not found' });
-    
+
     res.json(order);
   } catch (err) {
     res.status(500).json({ error: err.message });

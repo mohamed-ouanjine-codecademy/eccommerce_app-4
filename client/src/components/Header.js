@@ -3,14 +3,8 @@ import React from 'react';
 import { Navbar, Nav, Container, Button } from 'react-bootstrap'; // Add Button import
 import { Link, useNavigate } from 'react-router-dom';
 
-const Header = ({ isLoggedIn, user, setIsLoggedIn, cartItemCount }) => {
+const Header = ({ isLoggedIn, user, cartItemCount, handleLogout }) => {
   const navigate = useNavigate();
-
-  const handleLogout = () => {
-    localStorage.removeItem('userToken');
-    setIsLoggedIn(false);
-    navigate('/login');
-  };
 
   const handleCheckoutClick = () => {
     if (cartItemCount === 0) {
@@ -34,17 +28,16 @@ const Header = ({ isLoggedIn, user, setIsLoggedIn, cartItemCount }) => {
                 )}
                 <Nav.Link as={Link} to="/profile">Profile</Nav.Link>
                 <Nav.Link as={Link} to="/cart">Cart ({cartItemCount})</Nav.Link>
-                <Button 
-                  variant="outline-light" 
+                <Button
+                  variant="outline-light"
                   onClick={handleCheckoutClick}
                   className="ms-2"
                 >
                   Checkout
                 </Button>
-                <Button 
-                  variant="outline-danger" 
-                  onClick={handleLogout}
-                  className="ms-2"
+                <Button
+                  variant="outline-danger"
+                  onClick={handleLogout} // Use the prop directly
                 >
                   Logout
                 </Button>
