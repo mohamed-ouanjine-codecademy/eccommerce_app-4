@@ -114,20 +114,10 @@ const AdminDashboard = () => {
     }
   };
 
-  const handleUpdateProduct = async (e) => {
-    e.preventDefault();
-    try {
-      const token = localStorage.getItem('userToken');
-      const { data } = await axios.put(
-        `/api/admin/products/${editingProduct._id}`,
-        editingProduct,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      setProducts(products.map(p => p._id === data._id ? data : p));
-      setShowEditModal(false);
-    } catch (err) {
-      setError('Update failed: ' + (err.response?.data?.error || err.message));
-    }
+  // Add these functions
+  const handleEdit = (product) => {
+    setEditingProduct(product);
+    setShowEditModal(true);
   };
 
   const handleImageUpload = async (e) => {
@@ -148,6 +138,46 @@ const AdminDashboard = () => {
       setNewProduct({ ...newProduct, image: data.imageUrl });
     } catch (err) {
       setError('Image upload failed: ' + (err.response?.data?.error || err.message));
+    }
+  };
+
+  const handleEditImageUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append('image', file);
+
+    try {
+      const token = localStorage.getItem('userToken');
+      const { data } = await axios.post('/api/admin/upload', formData, {
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+      setEditingProduct(prev => ({ ...prev, image: data.imageUrl }));
+    } catch (err) {
+      setError('Image upload failed: ' + err.message);
+    }
+  };
+
+  const handleUpdateProduct = async (e) => {
+    e.preventDefault();
+    try {
+      const token = localStorage.getItem('userToken');
+      const { data } = await axios.put(
+        `/api/admin/products/${editingProduct._id}`,
+        editingProduct,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      
+      setProducts(prev => 
+        prev.map(p => p._id === data._id ? data : p)
+      );
+      setShowEditModal(false);
+    } catch (err) {
+      setError('Update failed: ' + err.message);
     }
   };
 
@@ -243,7 +273,7 @@ const AdminDashboard = () => {
               <Form.Control
                 type="text"
                 value={editingProduct?.name || ''}
-                onChange={(e) => setEditingProduct({ ...editingProduct, name: e.target.value })}
+                onChange={(e) => setEditingProduct(prev => ({ ...prev, name: e.target.value }))}
                 required
               />
             </Form.Group>
@@ -252,7 +282,7 @@ const AdminDashboard = () => {
               <Form.Control
                 type="number"
                 value={editingProduct?.price || 0}
-                onChange={(e) => setEditingProduct({ ...editingProduct, price: e.target.value })}
+                onChange={(e) => setEditingProduct(prev => ({ ...prev, price: e.target.value }))}
                 required
               />
             </Form.Group>
@@ -260,22 +290,24 @@ const AdminDashboard = () => {
               <Form.Label>Image</Form.Label>
               <Form.Control
                 type="file"
-                onChange={(e) => handleEditImageUpload(e)}
+                onChange={handleEditImageUpload}
                 accept="image/*"
               />
               {editingProduct?.image && (
                 <img 
                   src={editingProduct.image} 
                   alt="Preview" 
-                  style={{ width: '100px', marginTop: '10px' }}
+                  className="mt-2"
+                  style={{ width: '100px' }}
                 />
               )}
             </Form.Group>
-            <Button type="submit">Save Changes</Button>
+            <Button variant="primary" type="submit">
+              Save Changes
+            </Button>
           </Form>
         </Modal.Body>
       </Modal>
-
       <Tabs defaultActiveKey="products">
         <Tab eventKey="products" title="Products">
         <Form onSubmit={handleAddProduct} className="mb-4">
@@ -527,6 +559,7 @@ const AdminDashboard = () => {
           </Button>
         </Modal.Footer>
       </Modal>
+      
     </div>
   );
 };
