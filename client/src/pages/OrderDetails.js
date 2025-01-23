@@ -1,4 +1,4 @@
-// src/pages/OrderDetails.js
+// /client/src/pages/OrderDetails.js
 import React, { useEffect, useState } from 'react';
 import { Alert, Card, Table } from 'react-bootstrap';
 import axios from 'axios';

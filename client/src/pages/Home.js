@@ -1,4 +1,4 @@
-// src/pages/Home.js
+// /client/src/pages/Home.js
 import React, { useState, useEffect } from 'react';
 import { Card, Button, Row, Col, Container, Alert } from 'react-bootstrap';
 import { Link } from 'react-router-dom';

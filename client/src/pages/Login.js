@@ -1,4 +1,4 @@
-// src/pages/Login.js
+// /client/src/pages/Login.js
 import React, { useState } from 'react';
 import { Form, Button, Alert } from 'react-bootstrap';
 import axios from 'axios';

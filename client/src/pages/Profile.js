@@ -1,4 +1,4 @@
-// src/pages/Profile.js
+// /client/src/pages/Profile.js
 import React, { useEffect, useState } from 'react';
 import { Alert } from 'react-bootstrap';
 import axios from 'axios';

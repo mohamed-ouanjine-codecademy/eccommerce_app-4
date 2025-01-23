@@ -1,4 +1,4 @@
-// routes/cart.js
+// /server/routes/cart.js
 const express = require('express');
 const router = express.Router();
 const auth = require('../middleware/auth'); // Add this

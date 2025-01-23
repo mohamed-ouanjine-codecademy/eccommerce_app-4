@@ -1,4 +1,4 @@
-// queues/orderQueue.js
+// /server/queues/orderQueue.js
 const Queue = require('bull');
 const orderQueue = new Queue('order processing');
 

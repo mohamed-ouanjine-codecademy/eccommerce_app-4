@@ -1,4 +1,4 @@
-// utils/stockNotifier.js
+// /serverutils/stockNotifier.js
 const checkStockLevels = async () => {
   const lowStockProducts = await Product.find({
     stock: { $lte: '$safetyStock' }

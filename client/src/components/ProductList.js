@@ -1,4 +1,4 @@
-// src/components/ProductList.js
+// /client/src/components/ProductList.js
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 

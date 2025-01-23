@@ -1,4 +1,4 @@
-// src/components/Header.js
+// /client/src/components/Header.js
 import React from 'react';
 import { Navbar, Nav, Container, Button } from 'react-bootstrap'; // Add Button import
 import { Link, useNavigate } from 'react-router-dom';

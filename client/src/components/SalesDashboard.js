@@ -1,4 +1,4 @@
-// src/components/SalesDashboard.js
+// /client/src/components/SalesDashboard.js
 import { Line, Bar } from 'react-chartjs-2';
 import { Chart, registerables } from 'chart.js';
 Chart.register(...registerables);

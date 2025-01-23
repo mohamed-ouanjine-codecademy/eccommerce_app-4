@@ -1,4 +1,4 @@
-// src/pages/Checkout.js
+// /client/src/pages/Checkout.js
 import React, { useEffect, useState } from 'react';
 import { Form, Button, Alert, Card } from 'react-bootstrap';
 import axios from 'axios';

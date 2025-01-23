@@ -1,4 +1,4 @@
-// src/pages/ProductPage.js
+// /client/src/pages/ProductPage.js
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { Container, Row, Col, Image, Button, Alert, Form } from 'react-bootstrap';

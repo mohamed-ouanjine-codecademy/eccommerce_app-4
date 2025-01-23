@@ -1,4 +1,4 @@
-// models/Products.js
+// /server/models/Products.js
 const mongoose = require('mongoose');
 
 const productSchema = new mongoose.Schema({

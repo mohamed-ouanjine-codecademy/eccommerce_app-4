@@ -1,4 +1,4 @@
-// src/pages/CartPage.js
+// /client/src/pages/CartPage.js
 import React, { useEffect, useState, useCallback } from 'react';
 import { Table, Button, Alert, Spinner } from 'react-bootstrap';
 import axios from 'axios';

@@ -1,4 +1,4 @@
-// src/pages/AdminOrderDetails.js
+// /client/src/pages/AdminOrderDetails.js
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { Table, Alert, Card } from 'react-bootstrap';

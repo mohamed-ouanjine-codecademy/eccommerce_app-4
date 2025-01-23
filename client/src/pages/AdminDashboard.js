@@ -1,4 +1,4 @@
-// src/pages/AdminDashboard.js
+// /client/src/pages/AdminDashboard.js
 import React, { useEffect, useState } from 'react';
 import { Tab, Tabs, Table, Button, Form, Alert, Modal } from 'react-bootstrap';
 import axios from 'axios';

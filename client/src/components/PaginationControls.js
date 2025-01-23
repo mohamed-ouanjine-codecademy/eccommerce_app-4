@@ -1,4 +1,4 @@
-// src/components/PaginationControls.js
+// /client/src/components/PaginationControls.js
 import { Button, Form, Pagination } from 'react-bootstrap';
 
 const PaginationControls = ({ pagination, setPagination }) => {

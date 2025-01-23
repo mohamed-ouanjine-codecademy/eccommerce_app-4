@@ -1,4 +1,4 @@
-// scripts/migrateOrders.js
+// /server/scripts/migrateOrders.js
 const mongoose = require('mongoose');
 require('dotenv').config();
 require('../models/Order');
