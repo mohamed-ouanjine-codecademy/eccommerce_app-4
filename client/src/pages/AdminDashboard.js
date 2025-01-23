@@ -4,6 +4,7 @@ import { Tab, Tabs, Table, Button, Form, Alert, Modal } from 'react-bootstrap';
 import axios from 'axios';
 import PaginationControls from '../components/PaginationControls';
 import { RevenueChart, TopProductsChart } from '../components/RevenueChart'
+import { Link } from 'react-router-dom';
 
 const AdminDashboard = () => {
   const [products, setProducts] = useState([]);
@@ -444,20 +445,19 @@ const AdminDashboard = () => {
             <thead>
               <tr>
                 <th>Order ID</th>
-                <th>User</th>
+                <th>Customer</th>
                 <th>Total</th>
                 <th>Status</th>
-                <th>Date</th>
+                <th>Details</th>
               </tr>
             </thead>
             <tbody>
-              {Array.isArray(orders) && orders.map((order) => (
+              {orders.map(order => (
                 <tr key={order._id}>
                   <td>{order._id}</td>
                   <td>{order.user?.name}</td>
                   <td>${order.total.toFixed(2)}</td>
                   <td>
-                    {/* Status Dropdown */}
                     <Form.Select
                       value={order.status}
                       onChange={(e) => handleStatusChange(order._id, e.target.value)}
@@ -469,7 +469,16 @@ const AdminDashboard = () => {
                       <option value="cancelled">Cancelled</option>
                     </Form.Select>
                   </td>
-                  <td>{new Date(order.createdAt).toLocaleDateString()}</td>
+                  <td>
+                    <Button 
+                      as={Link} 
+                      to={`/admin/orders/${order._id}`}
+                      variant="info"
+                      size="sm"
+                    >
+                      View Details
+                    </Button>
+                  </td>
                 </tr>
               ))}
             </tbody>

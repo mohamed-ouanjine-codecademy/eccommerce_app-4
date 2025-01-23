@@ -27,7 +27,7 @@ const Orders = () => {
     <div className="container mt-5">
       <h2>Your Orders</h2>
       {error && <Alert variant="danger">{error}</Alert>}
-      
+
       {orders.length === 0 ? (
         <p>No orders found.</p>
       ) : (
@@ -46,6 +46,13 @@ const Orders = () => {
               <tr key={order._id}>
                 <td>{order._id}</td>
                 <td>{new Date(order.createdAt).toLocaleDateString()}</td>
+                <td>
+                  {order.items.map(item => (
+                    <div key={item.product._id}>
+                      {item.product.name} (x{item.quantity}) - ${item.price.toFixed(2)} each
+                    </div>
+                  ))}
+                </td>
                 <td>${order.total.toFixed(2)}</td>
                 <td>{order.status}</td>
                 <td>

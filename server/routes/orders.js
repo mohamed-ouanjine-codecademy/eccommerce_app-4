@@ -36,86 +36,99 @@ router.post('/payment/mock', auth, async (req, res) => {
 router.post('/', auth, async (req, res) => {
   const session = await mongoose.startSession();
   try {
-    console.log('Starting checkout process for user:', req.user.userId);
     await session.startTransaction();
     
     const { shippingAddress, paymentConfirmed } = req.body;
     const userId = req.user.userId;
 
-    console.log('Received paymentConfirmed:', paymentConfirmed);
-    console.log('Processing order with shipping address:', shippingAddress);
-
-    // [1] Verify Payment
+    // Payment verification
     if (process.env.NODE_ENV === 'production' && !paymentConfirmed) {
-      throw new Error('Payment not confirmed - production mode requires payment verification');
+      throw new Error('Payment confirmation required');
     }
 
-    // [2] Get User Cart
+    // Get user cart with products
     const user = await User.findById(userId)
       .populate('cart.product')
       .session(session);
-    console.log('User cart items:', user.cart);
 
-    // [3] Inventory Check
-    console.log('Starting inventory checks...');
-    for (const item of user.cart) {
-      const product = await Product.findById(item.product._id).session(session);
-      console.log(`Checking stock for ${product.name}: ${product.stock} available, need ${item.quantity}`);
-      
-      if (product.stock < item.quantity) {
-        throw new Error(`Insufficient stock for ${product.name} (Available: ${product.stock}, Requested: ${item.quantity})`);
-      }
-      
-      product.stock -= item.quantity;
-      await product.save({ session });
-      console.log(`Updated stock for ${product.name}: ${product.stock}`);
+    // Validate cart contents
+    if (!user.cart?.length) {
+      throw new Error('Cannot create order with empty cart');
     }
 
-    // [4] Create Order
-    const total = user.cart.reduce((sum, item) => sum + (item.product.price * item.quantity), 0);
-    console.log('Calculated order total:', total);
+    // Validate prices and process inventory
+    let total = 0;
+    const items = [];
+    
+    for (const cartItem of user.cart) {
+      const product = cartItem.product;
+      
+      // Price validation
+      if (!product || product.price <= 0) {
+        throw new Error(`Invalid price for ${product?.name || 'unknown product'}`);
+      }
 
+      // Inventory check
+      if (product.stock < cartItem.quantity) {
+        throw new Error(
+          `${product.name} stock insufficient (${product.stock} available, ${cartItem.quantity} requested)`
+        );
+      }
+
+      // Update stock
+      product.stock -= cartItem.quantity;
+      await product.save({ session });
+
+      // Store price snapshot
+      items.push({
+        product: product._id,
+        quantity: cartItem.quantity,
+        price: product.price || 0 // Ensure price is always set
+      });
+
+      total += product.price * cartItem.quantity;
+    }
+
+    // Create order
     const order = new Order({
       user: userId,
-      items: user.cart.map(item => ({
-        product: item.product._id,
-        quantity: item.quantity,
-        price: item.product.price // Add price snapshot
-      })),
-      total,
-      shippingAddress
+      items,
+      total: parseFloat(total.toFixed(2)),
+      shippingAddress,
+      status: 'processing',
+      paymentStatus: paymentConfirmed ? 'completed' : 'pending'
     });
 
     await order.save({ session });
-    console.log('Order created:', order);
 
-    // [5] Clear Cart
+    // Clear user cart
     user.cart = [];
     await user.save({ session });
-    console.log('Cart cleared successfully');
 
+    // Commit transaction
     await session.commitTransaction();
-    console.log('Transaction committed successfully');
 
-    // Return populated order
-    const populatedOrder = await Order.findById(order._id)
-      .populate('items.product', 'name price')
-      .populate('user', 'name email');
+    // Return order data
+    const orderData = await Order.findById(order._id)
+      .populate('items.product', 'name')
+      .lean();
 
-    res.status(201).json(populatedOrder);
+    res.status(201).json({
+      ...orderData,
+      items: orderData.items.map(item => ({
+        ...item,
+        price: item.price,
+        total: item.price * item.quantity
+      }))
+    });
 
   } catch (err) {
     await session.abortTransaction();
-    console.error('!! CHECKOUT ERROR !!', {
-      error: err.message,
-      stack: err.stack,
-      user: req.user?.userId,
-      body: req.body
-    });
-    res.status(500).json({ 
-      error: err.message.includes('stock') 
-        ? err.message 
-        : 'Checkout process failed - see server logs' 
+    console.error('Order creation failed:', err.message);
+    res.status(400).json({ 
+      error: err.message.includes('stock') || err.message.includes('price')
+        ? err.message
+        : 'Order processing failed'
     });
   } finally {
     session.endSession();

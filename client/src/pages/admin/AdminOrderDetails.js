@@ -1,10 +1,10 @@
-// src/pages/OrderDetails.js
+// src/pages/AdminOrderDetails.js
 import React, { useEffect, useState } from 'react';
-import { Alert, Card, Table } from 'react-bootstrap';
-import axios from 'axios';
 import { useParams } from 'react-router-dom';
+import { Table, Alert, Card } from 'react-bootstrap';
+import axios from 'axios';
 
-const OrderDetails = () => {
+const AdminOrderDetails = () => {
   const { id } = useParams();
   const [order, setOrder] = useState(null);
   const [error, setError] = useState('');
@@ -14,17 +14,17 @@ const OrderDetails = () => {
     const fetchOrder = async () => {
       try {
         const token = localStorage.getItem('userToken');
-        const { data } = await axios.get(`/api/orders/${id}`, {
+        const { data } = await axios.get(`/api/admin/orders/${id}`, {
           headers: { Authorization: `Bearer ${token}` }
         });
         setOrder(data);
       } catch (err) {
-        setError(err.response?.data?.error || 'Failed to load order');
+        setError(err.response?.data?.error || 'Failed to load order details');
       } finally {
         setLoading(false);
       }
     };
-
+    
     if (id) fetchOrder();
   }, [id]);
 
@@ -32,7 +32,7 @@ const OrderDetails = () => {
     <div className="container mt-5">
       <h2>Order Details</h2>
       {error && <Alert variant="danger">{error}</Alert>}
-
+      
       {loading ? (
         <p>Loading order details...</p>
       ) : order ? (
@@ -40,10 +40,9 @@ const OrderDetails = () => {
           <Card.Body>
             <Card.Title>Order #{order._id}</Card.Title>
             <Card.Text>
-              <strong>Date:</strong> {new Date(order.createdAt).toLocaleDateString()}<br />
-              <strong>Total:</strong> ${order.total.toFixed(2)}<br />
-              <strong>Status:</strong> {order.status}<br />
-              <strong>Shipping Address:</strong> {order.shippingAddress}
+              <strong>Date:</strong> {new Date(order.createdAt).toLocaleDateString()}<br/>
+              <strong>Total:</strong> ${(order.total || 0).toFixed(2)}<br/>
+              <strong>Status:</strong> {order.status}
             </Card.Text>
 
             <h5>Items:</h5>
@@ -57,12 +56,12 @@ const OrderDetails = () => {
                 </tr>
               </thead>
               <tbody>
-                {order.items.map(item => (
-                  <tr key={item.product._id}>
-                    <td>{item.product.name}</td>
-                    <td>${item.price.toFixed(2)}</td>
-                    <td>{item.quantity}</td>
-                    <td>${(item.price * item.quantity).toFixed(2)}</td>
+                {order.items?.map(item => (
+                  <tr key={item._id || item.product?._id}>
+                    <td>{item.product?.name || 'Product unavailable'}</td>
+                    <td>${(item.price || 0).toFixed(2)}</td>
+                    <td>{item.quantity || 0}</td>
+                    <td>${((item.price || 0) * (item.quantity || 0)).toFixed(2)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -76,4 +75,4 @@ const OrderDetails = () => {
   );
 };
 
-export default OrderDetails;
+export default AdminOrderDetails;

@@ -11,6 +11,7 @@ import CartPage from './pages/CartPage';
 import Checkout from './pages/Checkout';
 import Orders from './pages/Orders';
 import OrderDetails from './pages/OrderDetails';
+import AdminOrderDetails from './pages/admin/AdminOrderDetails';
 import AdminDashboard from './pages/AdminDashboard';
 import ProtectedRoute from './components/ProtectedRoute';
 
@@ -117,6 +118,14 @@ const App = () => {
             element={
               <ProtectedRoute>
                 <OrderDetails />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/admin/orders/:id" 
+            element={
+              <ProtectedRoute>
+                <AdminOrderDetails />
               </ProtectedRoute>
             } 
           />
