@@ -23,11 +23,11 @@ export class DIContainer {
         cache: this.cache,
         logger: logger.child({ service: 'ProductService' })
       }),
-      order: new OrderService({
-        logger: logger.child({ service: 'OrderService' }),
-        paymentService: this.paymentService,
-        notificationService: this.notificationService
-      }),
+      order: new OrderService(
+        logger.child({ service: 'OrderService' }),
+        new PaymentService(),
+        new NotificationService()
+      ),
       auth: new AuthService({
         logger: logger.child({ service: 'AuthService' })
       })

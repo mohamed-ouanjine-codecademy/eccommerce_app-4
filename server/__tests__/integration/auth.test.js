@@ -3,6 +3,7 @@ import request from 'supertest';
 import { testAppPromise } from '../../app.js';
 import User from '@models/User.js';
 import { describe, test, expect, beforeAll, afterAll, beforeEach } from '@jest/globals';
+import mongoose from 'mongoose';
 
 describe('Auth API Integration Tests', () => {
   let app;
@@ -15,9 +16,6 @@ describe('Auth API Integration Tests', () => {
     await User.deleteMany({});
   });
 
-  afterAll(async () => {
-    await User.deleteMany({});
-  });
   afterAll(async () => {
     await mongoose.disconnect();
     await RedisClient.quit();
@@ -34,7 +32,7 @@ describe('Auth API Integration Tests', () => {
 
     expect(response.status).toBe(201);
     expect(response.body.data).toHaveProperty('token');
-    
+
     const user = await User.findOne({ email: "test@example.com" });
     expect(user.email).toBe("test@example.com");
   });

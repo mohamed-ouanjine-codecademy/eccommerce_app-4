@@ -3,9 +3,10 @@ import express from 'express';
 import { OrderService } from '../services/OrderService.js';
 import AuthMiddleware from '../middlewares/auth.js';
 import APIResponse from '../utils/APIResponse.js';
+import { diContainer } from '../config/di.js'
 
 const router = express.Router();
-const orderService = new OrderService();
+const orderService = diContainer.getService('order');
 
 /**
  * @swagger

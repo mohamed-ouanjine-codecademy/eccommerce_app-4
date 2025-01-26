@@ -1,7 +1,10 @@
 // server/jest.config.cjs
 module.exports = {
   testEnvironment: 'node',
-  setupFilesAfterEnv: ['<rootDir>/__tests__/setup.js'],
+  setupFilesAfterEnv: [
+    '<rootDir>/__tests__/setup.js',
+    '<rootDir>/__tests__/setup/di.js'
+  ],
   testMatch: ['**/__tests__/**/*.test.js'],
   moduleNameMapper: {
     '^@models/(.*)$': '<rootDir>/models/$1',
@@ -16,5 +19,5 @@ module.exports = {
   },
   transformIgnorePatterns: [
     '/node_modules/(?!(mongodb-memory-server|@babel/runtime)/)'
-  ]
+  ],
 };

@@ -6,7 +6,11 @@ import PaymentService from './PaymentService.js';
 import NotificationService from './NotificationService.js';
 
 export class OrderService {
-  constructor({ logger, paymentService, notificationService }) {
+  constructor(
+    logger = console, // Default logger
+    paymentService = new PaymentService(),
+    notificationService = new NotificationService()
+  ) {
     this.logger = logger;
     this.paymentService = paymentService;
     this.notificationService = notificationService;
