@@ -5,6 +5,7 @@ import axios from 'axios';
 import PaginationControls from '../components/PaginationControls';
 import { RevenueChart, TopProductsChart } from '../components/RevenueChart'
 import { Link } from 'react-router-dom';
+import apiClient from '../api/client'
 
 const AdminDashboard = () => {
   const [products, setProducts] = useState([]);
@@ -45,7 +46,7 @@ const AdminDashboard = () => {
   const fetchData = async (endpoint, params, setter) => {
     try {
       const token = localStorage.getItem('userToken');
-      const { data } = await axios.get(`/api/admin/${endpoint}`, {
+      const { data } = await apiClient.get(`/admin/${endpoint}`, {
         headers: { Authorization: `Bearer ${token}` },
         params: {
           page: pagination.currentPage,

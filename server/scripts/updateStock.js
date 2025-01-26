@@ -1,5 +1,5 @@
 // /server/scripts/updateStock.js
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 require('dotenv').config();
 require('../models/Product'); // Path to your Product model
 

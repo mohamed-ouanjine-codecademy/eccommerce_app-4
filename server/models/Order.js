@@ -1,11 +1,12 @@
 // /server/models/Order.js
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
-const OrderSchema = new mongoose.Schema({
+const orderSchema = new mongoose.Schema({
   user: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
     required: true,
+    index: true
   },
   items: [{
     product: {
@@ -15,9 +16,10 @@ const OrderSchema = new mongoose.Schema({
     },
     quantity: {
       type: Number,
-      required: true
+      required: true,
+      min: [1, 'Quantity must be at least 1']
     },
-    price: {  // Add price snapshot
+    priceAtPurchase: {
       type: Number,
       required: true
     }
@@ -25,21 +27,55 @@ const OrderSchema = new mongoose.Schema({
   total: {
     type: Number,
     required: true,
+    min: [0.01, 'Total must be at least $0.01']
   },
   shippingAddress: {
-    type: String,
-    required: true,
+    street: String,
+    city: String,
+    state: String,
+    country: {
+      type: String,
+      default: 'US'
+    },
+    zipCode: String
   },
   paymentStatus: {
     type: String,
-    enum: ['pending', 'completed'],
-    default: 'pending',
+    enum: ['pending', 'completed', 'failed', 'refunded'],
+    default: 'pending'
   },
   status: {
     type: String,
     enum: ['pending', 'processing', 'shipped', 'delivered', 'cancelled'],
-    default: 'pending',
+    default: 'pending'
   },
-}, { timestamps: true });
+  paymentId: String,
+  trackingNumber: String
+}, {
+  timestamps: true,
+  toJSON: { virtuals: true },
+  toObject: { virtuals: true }
+});
 
-module.exports = mongoose.model('Order', OrderSchema);
+// Virtual for formatted order date
+orderSchema.virtual('orderDate').get(function() {
+  return this.createdAt.toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
+  });
+});
+
+// Prevent invalid order modifications
+orderSchema.pre('save', function(next) {
+  if (this.isModified('status') && this.status === 'cancelled') {
+    if (this.paymentStatus !== 'completed') {
+      return next(new Error('Only paid orders can be cancelled'));
+    }
+  }
+  next();
+});
+
+const Order = mongoose.model('Order', orderSchema);
+
+export default Order;

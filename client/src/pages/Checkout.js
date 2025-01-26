@@ -1,91 +1,71 @@
 // /client/src/pages/Checkout.js
-import React, { useEffect, useState } from 'react';
-import { Form, Button, Alert, Card } from 'react-bootstrap';
-import axios from 'axios';
+import React, { useEffect } from 'react';
+import { Form, Button, Alert, Card, Spinner } from 'react-bootstrap';
 import { useNavigate } from 'react-router-dom';
+import { useCart } from '../api/cart';
+import { useCreateOrder } from '../api/orders';
+import { usePayment } from '../api/payment';
+import { calculateCartTotal } from '../utils/cart';
+import { shallow } from 'zustand/shallow';
+import useCheckoutStore from '../store/checkout';
 
-const Checkout = ({ cartItems, setCartItems, setCartItemCount, syncCartWithServer }) => {
-  const [shippingAddress, setShippingAddress] = useState('');
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
+const Checkout = () => {
   const navigate = useNavigate();
+  const { data: cart } = useCart();
+  const { mutate: createOrder, isPending: isCreatingOrder } = useCreateOrder();
+  const { mutate: processPayment, isPending: isProcessingPayment } = usePayment();
+  
+  const [setOrderConfirmation] = useCheckoutStore(
+    (state) => [state.setOrderConfirmation],
+    shallow
+  );
 
-  // Calculate total function
-  const calculateTotal = () => {
-    return cartItems.reduce((sum, item) => {
-      const price = Number(item.product?.price) || 0; // Force numeric conversion
-      return sum + (price * item.quantity);
-    }, 0);
-  };
+  const [error, setError] = useState('');
+  const [shippingAddress, setShippingAddress] = useState('');
+  const total = calculateCartTotal(cart?.items);
 
   useEffect(() => {
-    if (!cartItems || cartItems.length === 0) {
+    if (!cart || cart.items.length === 0) {
       navigate('/cart');
     }
-  }, [cartItems, navigate]);
+  }, [cart, navigate]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setLoading(true);
     setError('');
-    const token = localStorage.getItem('userToken');
-
+    
     try {
-      // 1. Validate cart and total
-      const total = calculateTotal();
-      if (isNaN(total) || total <= 0) {
-        throw new Error('Invalid cart total');
-      }
+      // Process payment
+      const paymentResult = await processPayment({
+        amount: total,
+        currency: 'USD'
+      });
 
-      // 2. Process payment
-      const paymentResponse = await axios.post(
-        'http://localhost:5000/api/orders/payment/mock',
-        { amount: total.toFixed(2) },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-
-      if (!paymentResponse.data.success) {
+      if (!paymentResult.success) {
         throw new Error('Payment authorization failed');
       }
 
-      // 3. Create order
-      const orderResponse = await axios.post(
-        'http://localhost:5000/api/orders', // Direct server URL
+      // Create order
+      createOrder(
         {
           shippingAddress,
-          paymentConfirmed: true,
-          cartItems // Add this line to send cart items
+          paymentId: paymentResult.transactionId,
+          items: cart.items
         },
-        { headers: { Authorization: `Bearer ${token}` } }
+        {
+          onSuccess: (order) => {
+            setOrderConfirmation(order);
+            navigate(`/orders/${order._id}`);
+          },
+          onError: (error) => {
+            setError(error.message);
+          }
+        }
       );
 
-      // 4. Handle success
-      if (orderResponse.data.success) {
-        setCartItems([]);
-        setCartItemCount(0);
-        navigate(`/orders/${orderResponse.data.order._id}`);
-      } else {
-        throw new Error('Order creation failed');
-      }
-
     } catch (err) {
-      console.error('Full error object:', err); // Add detailed logging
-      const serverMessage = err.response?.data?.error?.message;
-      const errorMessage = serverMessage || 
-                          err.message || 
-                          'Order failed. Please contact support.';
-      setError(errorMessage);
-
-      // 5. Sync cart if error contains stock information
-      if (errorMessage.toLowerCase().includes('stock')) {
-        try {
-          await syncCartWithServer();
-        } catch (refreshError) {
-          console.error('Cart refresh failed:', refreshError);
-        }
-      }
-    } finally {
-      setLoading(false);
+      console.error('Checkout error:', err);
+      setError(err.response?.data?.error?.message || 'Checkout failed. Please try again.');
     }
   };
 
@@ -93,40 +73,61 @@ const Checkout = ({ cartItems, setCartItems, setCartItemCount, syncCartWithServe
     <div className="container mt-5">
       <h2>Checkout</h2>
 
-      {!error && cartItems?.length > 0 && (
+      {cart?.items?.length > 0 && (
         <div className="mb-3">
-          <strong>Total:</strong> ${calculateTotal()}
+          <h4>Order Total: ${total.toFixed(2)}</h4>
         </div>
       )}
 
       {error && <Alert variant="danger">{error}</Alert>}
 
-      {cartItems?.length > 0 ? (
-        <Card className="p-3">
-          <Form onSubmit={handleSubmit}>
-            <Form.Group className="mb-3">
-              <Form.Label>Shipping Address</Form.Label>
-              <Form.Control
-                as="textarea"
-                rows={3}
-                value={shippingAddress}
-                onChange={(e) => setShippingAddress(e.target.value)}
-                required
-              />
-            </Form.Group>
+      <Card className="p-4 shadow-sm">
+        <Form onSubmit={handleSubmit}>
+          <Form.Group className="mb-4">
+            <Form.Label>Shipping Address</Form.Label>
+            <Form.Control
+              as="textarea"
+              rows={4}
+              value={shippingAddress}
+              onChange={(e) => setShippingAddress(e.target.value)}
+              required
+              placeholder="Enter full shipping address including zip code"
+            />
+          </Form.Group>
 
+          <div className="d-grid gap-2">
             <Button
               type="submit"
-              disabled={loading}
+              size="lg"
+              disabled={isProcessingPayment || isCreatingOrder}
               variant={error ? 'danger' : 'primary'}
             >
-              {loading ? 'Processing...' : error ? 'Try Again' : 'Place Order'}
+              {isProcessingPayment || isCreatingOrder ? (
+                <>
+                  <Spinner
+                    animation="border"
+                    size="sm"
+                    className="me-2"
+                  />
+                  Processing...
+                </>
+              ) : error ? (
+                'Try Again'
+              ) : (
+                'Confirm Order'
+              )}
             </Button>
-          </Form>
-        </Card>
-      ) : (
-        <Alert variant="warning">Your cart is empty</Alert>
-      )}
+            
+            <Button
+              variant="outline-secondary"
+              onClick={() => navigate('/cart')}
+              disabled={isProcessingPayment || isCreatingOrder}
+            >
+              Back to Cart
+            </Button>
+          </div>
+        </Form>
+      </Card>
     </div>
   );
 };

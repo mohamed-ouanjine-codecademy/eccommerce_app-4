@@ -1,0 +1,6 @@
+// server/jsconfig.json
+{
+  "typeAcquisition": {
+    "include": ["jest"]
+  }
+}

@@ -1,8 +1,8 @@
-// /serverutils/stockNotifier.js
+// /server/utils/stockNotifier.js
 const checkStockLevels = async () => {
   const lowStockProducts = await Product.find({
-    stock: { $lte: '$safetyStock' }
-  }).populate('supplier');
+    $expr: { $lte: ["$stock", "$safetyStock"] }
+  });
 
   lowStockProducts.forEach(product => {
     console.log(`Low stock alert for ${product.name}!`);

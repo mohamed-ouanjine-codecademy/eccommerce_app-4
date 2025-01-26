@@ -1,7 +1,8 @@
 // /server/models/User.js
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
+import Product  from './Product';
 
-const UserSchema = new mongoose.Schema({
+const userSchema  = new mongoose.Schema({
   name: {
     type: String,
     required: true,
@@ -38,7 +39,7 @@ const UserSchema = new mongoose.Schema({
   timestamps: true,
 });
 
-UserSchema.post('find', async function (docs) {
+userSchema.post('find', async function (docs) {
   if (!Array.isArray(docs)) return;
   
   for (const user of docs) {
@@ -55,4 +56,4 @@ UserSchema.post('find', async function (docs) {
   }
 });
 
-module.exports = mongoose.model('User', UserSchema);
+export default mongoose.model('User', userSchema); 

@@ -1,123 +1,79 @@
 // /client/src/pages/CartPage.js
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Table, Button, Alert, Spinner } from 'react-bootstrap';
-import axios from 'axios';
-import { useNavigate, Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { useCart, useUpdateCartItem, useRemoveFromCart } from '../api/cart';
+import { useWebSocket } from '../hooks/useWebSocket';
+import { calculateCartTotal } from '../utils/cart';
+import { QueryKeys } from '../lib/react-query';
 
-const CartPage = ({ cartItems, setCartItems, syncCartWithServer }) => {
-  const [error, setError] = useState('');
-  const [stockErrors, setStockErrors] = useState({});
-  const [processing, setProcessing] = useState(null);
+const CartPage = () => {
   const navigate = useNavigate();
+  const { data: cart, isLoading, isError, error } = useCart();
+  const { mutate: updateItem } = useUpdateCartItem();
+  const { mutate: removeItem } = useRemoveFromCart();
+  const [processingId, setProcessingId] = useState(null);
+  const [stockErrors, setStockErrors] = useState({});
 
-  const handleQuantityChange = async (productId, newQuantity) => {
-    try {
-      setProcessing(`update-${productId}`);
-      const token = localStorage.getItem('userToken');
-      newQuantity = Math.max(1, newQuantity);
+  // Real-time stock updates
+  const productIds = cart?.items?.map(item => item.product._id) || [];
+  useWebSocket(productIds);
 
-      // Verify product exists in cart first
-      const cartItem = cartItems.find(item => item.product?._id === productId);
-      if (!cartItem) {
-        setError('This item is no longer in your cart');
-        setCartItems(prev => prev.filter(item => item.product?._id !== productId));
-        return;
+  const handleQuantityChange = (productId, newQuantity) => {
+    setProcessingId(`update-${productId}`);
+    updateItem(
+      { productId, quantity: newQuantity },
+      {
+        onSettled: () => setProcessingId(null),
       }
-
-      // Update server first
-      await axios.patch(`/api/cart/${productId}`,
-        { quantity: newQuantity },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      await syncCartWithServer();
-
-      // Then update local state
-      setCartItems(prev => prev.map(item =>
-        item.product?._id === productId
-          ? { ...item, quantity: newQuantity }
-          : item
-      ));
-
-    } catch (err) {
-      if (err.response?.status === 404) {
-        // Product not found in server's cart - sync state
-        setCartItems(prev => prev.filter(item => item.product?._id !== productId));
-        setError('This item was removed from your cart');
-        await syncCartWithServer();
-      } else {
-        setError(err.response?.data?.error || 'Failed to update quantity');
-      }
-    } finally {
-      setProcessing(null);
-    }
+    );
   };
 
-  const handleRemoveItem = async (productId) => {
-    try {
-      setProcessing(`remove-${productId}`);
-      const token = localStorage.getItem('userToken');
-
-      await axios.delete(`/api/cart/${productId}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      await syncCartWithServer();
-
-      setCartItems(prev => prev.filter(item => item.product._id !== productId));
-    } catch (err) {
-      setError('Failed to remove item: ' + (err.response?.data?.error || err.message));
-    } finally {
-      setProcessing(null);
-    }
+  const handleRemoveItem = (productId) => {
+    setProcessingId(`remove-${productId}`);
+    removeItem(productId, {
+      onSettled: () => setProcessingId(null),
+    });
   };
 
-  const calculateTotal = useCallback(() => {
-    return cartItems.reduce((sum, item) => {
-      return sum + (item.product?.price || 0) * item.quantity;
-    }, 0);
-  }, [cartItems]);
-
-  const verifyStock = useCallback(async () => {
-    try {
-      const token = localStorage.getItem('userToken');
-      const errors = {};
-
-      await Promise.all(cartItems.map(async (item) => {
-        if (!item.product?._id) {
-          errors[item._id] = 'Invalid product reference';
-          return;
-        }
-
-        try {
-          const { data } = await axios.get(`/api/products/${item.product._id}`, {
-            headers: { Authorization: `Bearer ${token}` }
-          });
-
-          if (data.stock < item.quantity) {
-            errors[item.product._id] = `Only ${data.stock} available (you have ${item.quantity})`;
-          }
-        } catch (err) {
-          errors[item.product._id] = 'Failed to verify stock';
-        }
-      }));
-
-      setStockErrors(errors);
-    } catch (err) {
-      setError('Failed to verify stock levels');
-    }
-  }, [cartItems]);
+  const verifyStock = useCallback(() => {
+    const errors = {};
+    cart?.items?.forEach(item => {
+      if (item.quantity > item.product.stock) {
+        errors[item.product._id] = 
+          `Only ${item.product.stock} available (you have ${item.quantity})`;
+      }
+    });
+    setStockErrors(errors);
+  }, [cart]);
 
   useEffect(() => {
-    if (cartItems.length > 0) {
-      verifyStock();
-    }
-  }, [cartItems, verifyStock]);
+    if (cart) verifyStock();
+  }, [cart, verifyStock]);
+
+  if (isLoading) {
+    return (
+      <div className="container mt-5 text-center">
+        <Spinner animation="border" role="status">
+          <span className="visually-hidden">Loading cart...</span>
+        </Spinner>
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="container mt-5">
+        <Alert variant="danger">{error.message || 'Failed to load cart'}</Alert>
+      </div>
+    );
+  }
 
   return (
     <div className="container mt-5">
       <h2>Your Cart</h2>
-      {error && <Alert variant="danger" dismissible onClose={() => setError('')}>{error}</Alert>}
-
-      {cartItems.length === 0 ? (
+      
+      {cart?.items?.length === 0 ? (
         <div className="text-center py-5">
           <p className="fs-4">Your cart is empty</p>
           <Button as={Link} to="/" variant="primary" size="lg">
@@ -137,16 +93,16 @@ const CartPage = ({ cartItems, setCartItems, syncCartWithServer }) => {
               </tr>
             </thead>
             <tbody>
-              {cartItems.map((item) => {
+              {cart?.items?.map((item) => {
                 const price = item.product?.price || 0;
                 const itemTotal = price * item.quantity;
-                const isUpdating = processing === `update-${item.product?._id}`;
-                const isRemoving = processing === `remove-${item.product?._id}`;
+                const isUpdating = processingId === `update-${item.product._id}`;
+                const isRemoving = processingId === `remove-${item.product._id}`;
 
                 return (
-                  <tr key={item.product?._id || item._id}>
+                  <tr key={item.product._id}>
                     <td>
-                      {item.product?.image && (
+                      {item.product.image && (
                         <img
                           src={item.product.image}
                           alt={item.product.name}
@@ -154,7 +110,7 @@ const CartPage = ({ cartItems, setCartItems, syncCartWithServer }) => {
                           style={{ width: '60px', height: '60px', objectFit: 'cover' }}
                         />
                       )}
-                      {item.product?.name || 'Product unavailable'}
+                      {item.product.name}
                     </td>
                     <td>${price.toFixed(2)}</td>
                     <td>
@@ -162,16 +118,16 @@ const CartPage = ({ cartItems, setCartItems, syncCartWithServer }) => {
                         <Button
                           size="sm"
                           variant="outline-secondary"
-                          onClick={() => handleQuantityChange(item.product?._id, item.quantity - 1)}
+                          onClick={() => handleQuantityChange(item.product._id, item.quantity - 1)}
                           disabled={item.quantity <= 1 || isUpdating}
                         >
                           -
                         </Button>
-                        <span>{isUpdating ? <Spinner animation="border" size="sm" /> : item.quantity}</span>
+                        <span>{isUpdating ? <Spinner size="sm" /> : item.quantity}</span>
                         <Button
                           size="sm"
                           variant="outline-secondary"
-                          onClick={() => handleQuantityChange(item.product?._id, item.quantity + 1)}
+                          onClick={() => handleQuantityChange(item.product._id, item.quantity + 1)}
                           disabled={isUpdating}
                         >
                           +
@@ -183,14 +139,10 @@ const CartPage = ({ cartItems, setCartItems, syncCartWithServer }) => {
                       <Button
                         variant="danger"
                         size="sm"
-                        onClick={() => handleRemoveItem(item.product?._id)}
+                        onClick={() => handleRemoveItem(item.product._id)}
                         disabled={isRemoving}
                       >
-                        {isRemoving ? (
-                          <Spinner animation="border" size="sm" />
-                        ) : (
-                          'Remove'
-                        )}
+                        {isRemoving ? <Spinner size="sm" /> : 'Remove'}
                       </Button>
                     </td>
                   </tr>
@@ -200,9 +152,7 @@ const CartPage = ({ cartItems, setCartItems, syncCartWithServer }) => {
           </Table>
 
           <div className="text-end mb-4">
-            <h4>
-              Grand Total: ${calculateTotal().toFixed(2)}
-            </h4>
+            <h4>Grand Total: ${calculateCartTotal(cart?.items).toFixed(2)}</h4>
           </div>
 
           <div className="d-flex justify-content-between">
@@ -229,23 +179,23 @@ const CartPage = ({ cartItems, setCartItems, syncCartWithServer }) => {
                 <strong>Action Required:</strong> Some items have stock issues
               </Alert>
 
-              {cartItems.map(item => (
-                stockErrors[item.product?._id] && (
+              {cart?.items?.map(item => (
+                stockErrors[item.product._id] && (
                   <Alert
-                    key={item.product?._id}
+                    key={item.product._id}
                     variant="warning"
                     className="d-flex align-items-center justify-content-between py-2"
                   >
                     <div>
-                      <strong>{item.product?.name || 'Unknown Product'}</strong>
+                      <strong>{item.product.name}</strong>
                       <div className="small mt-1">
-                        {stockErrors[item.product?._id]}
+                        {stockErrors[item.product._id]}
                       </div>
                     </div>
                     <Button
                       variant="outline-danger"
                       size="sm"
-                      onClick={() => handleRemoveItem(item.product?._id)}
+                      onClick={() => handleRemoveItem(item.product._id)}
                     >
                       Remove Item
                     </Button>

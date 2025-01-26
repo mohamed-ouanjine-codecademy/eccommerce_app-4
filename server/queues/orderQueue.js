@@ -1,5 +1,5 @@
 // /server/queues/orderQueue.js
-const Queue = require('bull');
+import Queue from 'bull';
 const orderQueue = new Queue('order processing');
 
 orderQueue.process(async job => {

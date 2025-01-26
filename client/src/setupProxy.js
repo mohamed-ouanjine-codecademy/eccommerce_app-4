@@ -1,4 +1,4 @@
-// /client/src/setupProxy.js
+// Uncomment and activate proxy
 const { createProxyMiddleware } = require('http-proxy-middleware');
 
 module.exports = function(app) {
@@ -7,9 +7,6 @@ module.exports = function(app) {
     createProxyMiddleware({
       target: 'http://localhost:5000',
       changeOrigin: true,
-      pathRewrite: {
-        '^/api': ''
-      }
     })
   );
 };

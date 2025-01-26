@@ -1,93 +1,78 @@
-// /server/models/Products.js
-const mongoose = require('mongoose');
+// /server/models/Product.js
+import mongoose from 'mongoose';
 
 const productSchema = new mongoose.Schema({
   name: {
     type: String,
     required: [true, 'Product name is required'],
     trim: true,
-    maxlength: [100, 'Name cannot exceed 100 characters']
+    maxlength: [100, 'Name cannot exceed 100 characters'],
+    index: true
   },
   price: {
     type: Number,
     required: true,
-    validate: {
-      validator: function (v) {
-        return v > 0;
-      },
-      message: 'Price must be greater than 0'
-    }
+    min: [0.01, 'Price must be at least $0.01'],
+    set: v => Math.round(v * 100) / 100 // Store as cents
   },
   priceHistory: [{
-    price: {
-      type: Number,
-      required: true
-    },
-    date: {
+    price: Number,
+    changedAt: {
       type: Date,
       default: Date.now
     }
   }],
-  description: {
-    type: String,
-    trim: true,
-    maxlength: [1000, 'Description cannot exceed 1000 characters']
-  },
-  category: {
-    type: String,
-    required: true,
-    enum: ['electronics', 'accessories', 'home', 'other']
-  },
-  image: {
-    type: String,
-    default: 'https://via.placeholder.com/200x200.png?text=Product+Image'
-  },
   stock: {
     type: Number,
     min: [0, 'Stock cannot be negative'],
-    default: 10, // Change from 0 to 10
-    validate: {
-      validator: Number.isInteger,
-      message: 'Stock must be a whole number'
+    default: 0
+  },
+  sku: {
+    type: String,
+    unique: true,
+    sparse: true
+  },
+  category: {
+    type: String,
+    enum: ['electronics', 'clothing', 'home', 'other'],
+    required: true
+  },
+  ratings: {
+    average: {
+      type: Number,
+      default: 0,
+      min: [0, 'Rating must be at least 0'],
+      max: [5, 'Rating cannot exceed 5']
+    },
+    count: {
+      type: Number,
+      default: 0
     }
-  },
-  safetyStock: {
-    type: Number,
-    min: 0,
-    default: 5
-  },
-  allowBackorder: {
-    type: Boolean,
-    default: false
-  },
-  lastRestock: Date,
-  version: { type: Number, default: 0 }
+  }
 }, {
-  timestamps: true
+  timestamps: true,
+  toJSON: { virtuals: true },
+  toObject: { virtuals: true }
 });
 
-productSchema.methods.getSafeStockInfo = function () {
-  return {
-    _id: this._id,
-    name: this.name,
-    price: this.price,
-    availableStock: this.stock,
-    maxOrderQty: Math.min(this.stock, 10) // Limits max purchase quantity
-  };
-};
+// Virtual for formatted price
+productSchema.virtual('priceFormatted').get(function() {
+  return `$${this.price.toFixed(2)}`;
+});
 
 // Price change tracking
-productSchema.pre('save', function (next) {
-  if (this.isModified('price')) {
-    const currentPrice = this.price;
-
-    // Only add if different from last entry
-    if (this.priceHistory.length === 0 ||
-      this.priceHistory[this.priceHistory.length - 1].price !== currentPrice) {
-      this.priceHistory.push({ price: currentPrice });
-    }
+productSchema.pre('save', function(next) {
+  if (this.isModified('price') && !this.isNew) {
+    this.priceHistory.push({ price: this.price });
   }
   next();
 });
 
-module.exports = mongoose.model('Product', productSchema);
+// Stock status indicator
+productSchema.virtual('inStock').get(function() {
+  return this.stock > 0;
+});
+
+const Product = mongoose.model('Product', productSchema);
+
+export default Product;

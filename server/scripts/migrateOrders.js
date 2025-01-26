@@ -1,5 +1,5 @@
 // /server/scripts/migrateOrders.js
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 require('dotenv').config();
 require('../models/Order');
 require('../models/Product');

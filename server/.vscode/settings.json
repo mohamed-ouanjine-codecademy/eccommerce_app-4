@@ -1,0 +1,10 @@
+{
+  "eslint.validate": [
+    "javascript",
+    "javascriptreact"
+  ],
+  "jest.autoEnable": true,
+  "editor.codeActionsOnSave": {
+    "source.fixAll.eslint": true
+  }
+}
